@@ -211,7 +211,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "process-master"
+name = "process-manager"
 version = "1.0.0"
 dependencies = [
  "clap",
