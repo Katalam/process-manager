@@ -6,13 +6,19 @@ use tokio::signal;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Run multiple Laravel queue workers with graceful shutdown")]
+#[command(author = "Katalam", version = "v1.0.0", about = "Run multiple Laravel queue workers with graceful shutdown")]
 struct Args {
     #[arg(short, long, default_value_t = 2)]
     count: u32,
 
     #[arg(long)]
     no_herd: bool,
+
+    #[arg(short, long, default_value_t = 60)]
+    timeout: u64,
+
+    #[arg(short, long, default_value_t = false)]
+    verbose: bool,
 }
 
 #[tokio::main]
@@ -22,15 +28,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut handles = Vec::new();
 
     for i in 1..=args.count {
-        let mut cmd = if args.no_herd {
-            let mut c = Command::new("php");
-            c.args(["artisan", "queue:listen"]);
-            c
+        let (program, mut cmd_args) = if args.no_herd {
+            ("php", vec!["artisan".to_string(), "queue:listen".to_string()])
         } else {
-            let mut c = Command::new("herd");
-            c.args(["php", "artisan", "queue:listen"]);
-            c
+            ("herd", vec!["php".to_string(), "artisan".to_string(), "queue:listen".to_string()])
         };
+
+        if args.timeout != 60 {
+            cmd_args.push("--timeout".to_string());
+            cmd_args.push(args.timeout.to_string());
+        }
+
+        if args.verbose {
+            cmd_args.push("-v".to_string());
+        }
+
+        let mut cmd = Command::new(program);
+        cmd.args(&cmd_args);
 
         // Ensure child processes die if the Rust script is killed or crashes
         cmd.kill_on_drop(true);
@@ -44,35 +58,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let worker_token = token.clone();
 
         let handle = tokio::spawn(async move {
-            println!("[System] Worker #{} started.", i);
+            println!("Worker #{} started.", i);
 
             loop {
                 tokio::select! {
                     // Listen for new lines from the subprocess
                     result = reader.next_line() => {
                         match result {
-                            Ok(Some(line)) => println!("[Worker {}] {}", i, line),
+                            Ok(Some(line)) => println!("[{}] {}", i, line),
                             Ok(None) => break, // Stream closed
                             Err(_) => break,
                         }
                     }
                     // Listen for the shutdown signal
                     _ = worker_token.cancelled() => {
-                        println!("[System] Worker #{} received shutdown signal...", i);
+                        println!("Worker #{} received shutdown signal...", i);
                         // Explicitly kill the child process
                         let _ = child.kill().await;
                         break;
                     }
                 }
             }
-            println!("[System] Worker #{} cleaned up.", i);
+            println!("Worker #{} cleaned up.", i);
         });
 
         handles.push(handle);
     }
 
     signal::ctrl_c().await?;
-    println!("\n[System] Shutdown signal received. Stopping all workers...");
+    println!("\nShutdown signal received. Stopping all workers...");
 
     token.cancel();
 
@@ -80,6 +94,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = handle.await;
     }
 
-    println!("[System] All workers stopped. Exiting.");
     Ok(())
 }
