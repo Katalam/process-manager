@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let worker_token = token.clone();
 
         let handle = tokio::spawn(async move {
-            println!("Worker #{} started.", i);
+            println!("[{}] {}", i, format!("{} {}", program, cmd_args.join(" ")));
 
             loop {
                 tokio::select! {
@@ -72,14 +72,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     // Listen for the shutdown signal
                     _ = worker_token.cancelled() => {
-                        println!("Worker #{} received shutdown signal...", i);
+                        println!("[{}] Received shutdown signal...", i);
                         // Explicitly kill the child process
                         let _ = child.kill().await;
                         break;
                     }
                 }
             }
-            println!("Worker #{} cleaned up.", i);
+            println!("[{}] Cleaned up.", i);
         });
 
         handles.push(handle);
