@@ -95,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let cmd_display = format!("{} {}", program, cmd_args.join(" "));
 
             let handle = tokio::spawn(async move {
-                println!("\x1b[2m[{}] Spawning {}\x1b[0m", worker_id, cmd_display);
+                println!("\x1b[2m[{:02}] Spawning {}\x1b[0m", worker_id, cmd_display);
 
                 loop {
                     tokio::select! {
